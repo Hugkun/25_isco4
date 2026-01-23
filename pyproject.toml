@@ -3,17 +3,19 @@ name = "25-isco4"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.14.2"
+requires-python = "==3.13.*"
 dependencies = [
-    "langchain-community>=0.3.0",
-    "langchain-google-genai>=2.1.0",
-    "faiss-cpu>=1.9.0",
-    "pypdf>=5.0.0",
-    "openpyxl>=3.1.0",
-    "pandas>=2.2.0",
-    "python-dotenv>=1.0.0",
-    "ragas>=0.2.0",
+    "faiss-cpu>=1.13.2",
     "jsonref>=1.1.0",
-    "matplotlib>=3.9.0",
     "jupyterlab>=4.5.2",
+    "langchain-community>=0.4.1",
+    "langchain-google-genai>=4.2.0",
+    "langchain-ollama>=1.0.1",
+    "matplotlib>=3.10.8",
+    "openpyxl>=3.1.5",
+    "pandas>=2.3.3",
+    "pypdf>=6.6.0",
+    "python-dotenv>=1.2.1",
+    "ragas>=0.4.3",
+    "torch>=2.10.0",
 ]

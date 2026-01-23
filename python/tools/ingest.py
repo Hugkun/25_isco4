@@ -6,6 +6,7 @@ outputs/preprocessed/preprocessed.xlsxを読み込み、
 FAISSベクトルデータベースを作成してoutputs/faiss.indexに保存する。
 """
 
+import argparse
 import os
 from pathlib import Path
 
@@ -14,6 +15,7 @@ from dotenv import load_dotenv
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_ollama import OllamaEmbeddings
 
 # .envファイルの読み込み
 load_dotenv()
@@ -24,8 +26,11 @@ INPUT_FILE = PROJECT_ROOT / "outputs" / "preprocessed" / "preprocessed.xlsx"
 OUTPUT_DIR = PROJECT_ROOT / "outputs"
 OUTPUT_FILE = OUTPUT_DIR / "faiss.index"
 
-# 埋め込みモデル設定
-EMBEDDING_MODEL = "models/gemini-embedding-001"
+# デフォルト埋め込みモデル設定
+DEFAULT_EMBEDDING_MODEL = "embeddinggemma:latest"
+
+# Gemini APIの埋め込みモデル名
+GEMINI_EMBEDDING_MODEL = "gemini-embedding-001"
 
 
 def load_preprocessed_data() -> list[Document]:
@@ -67,22 +72,37 @@ def load_preprocessed_data() -> list[Document]:
     return documents
 
 
-def create_embeddings() -> GoogleGenerativeAIEmbeddings:
-    """埋め込みモデルを初期化する"""
-    api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError(
-            "GOOGLE_API_KEY または GEMINI_API_KEY が設定されていません。.envファイルを確認してください。"
-        )
+def create_embeddings(
+    model_name: str,
+) -> GoogleGenerativeAIEmbeddings | OllamaEmbeddings:
+    """埋め込みモデルを初期化する
 
-    embeddings = GoogleGenerativeAIEmbeddings(
-        model=EMBEDDING_MODEL, google_api_key=api_key
-    )
+    Args:
+        model_name: 埋め込みモデルの名前。Gemini APIのgemini-embedding-001か、
+                   Ollamaに公開されているモデルを指定できる。
+
+    Returns:
+        初期化された埋め込みモデル
+    """
+    if model_name == GEMINI_EMBEDDING_MODEL:
+        # Gemini APIの埋め込みモデルを使用
+        api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise ValueError(
+                "GOOGLE_API_KEY または GEMINI_API_KEY が設定されていません。.envファイルを確認してください。"
+            )
+        embeddings = GoogleGenerativeAIEmbeddings(
+            model=f"models/{GEMINI_EMBEDDING_MODEL}", google_api_key=api_key
+        )
+    else:
+        # Ollamaの埋め込みモデルを使用
+        embeddings = OllamaEmbeddings(model=model_name)
+
     return embeddings
 
 
 def create_vector_store(
-    documents: list[Document], embeddings: GoogleGenerativeAIEmbeddings
+    documents: list[Document], embeddings: GoogleGenerativeAIEmbeddings | OllamaEmbeddings
 ) -> FAISS:
     """FAISSベクトルストアを作成する"""
     vector_store = FAISS.from_documents(documents=documents, embedding=embeddings)
@@ -96,8 +116,26 @@ def save_vector_store(vector_store: FAISS) -> None:
     print(f"  保存完了: {OUTPUT_FILE}")
 
 
+def parse_args() -> argparse.Namespace:
+    """コマンドライン引数をパースする"""
+    parser = argparse.ArgumentParser(
+        description="前処理済みデータを読み込み、ベクトルデータベースを作成する"
+    )
+    parser.add_argument(
+        "--embedding-model",
+        type=str,
+        default=DEFAULT_EMBEDDING_MODEL,
+        help=f"埋め込みモデルの名前。Ollamaのモデルまたは'{GEMINI_EMBEDDING_MODEL}'を指定可能。"
+        f"(デフォルト: {DEFAULT_EMBEDDING_MODEL})",
+    )
+    return parser.parse_args()
+
+
 def main():
     """メイン処理"""
+    args = parse_args()
+    embedding_model = args.embedding_model
+
     print("=== ベクトルデータベース作成スクリプト ===")
 
     # 前処理済みデータの読み込み
@@ -106,8 +144,8 @@ def main():
 
     # 埋め込みモデルの初期化
     print("\n2. 埋め込みモデルの初期化")
-    embeddings = create_embeddings()
-    print(f"  モデル: {EMBEDDING_MODEL}")
+    embeddings = create_embeddings(embedding_model)
+    print(f"  モデル: {embedding_model}")
 
     # ベクトルストアの作成
     print("\n3. ベクトルストアの作成")

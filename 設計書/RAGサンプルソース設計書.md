@@ -1,7 +1,9 @@
 # RAGサンプルソース設計書
 
+ver1のRAGサンプルソースの設計書は、[こちら](../ver1/RAGサンプルソース設計書.md)を参照してください。
+
 ## プロジェクトの目的
-このプロジェクトの目的は、RAGのサンプルソースを作成することです。複数の文章生成モデルを使ったRAGの性能をまとめて評価できるシステムを作ります。
+このプロジェクトの目的は、RAGのサンプルソースを作成することです。複数のLLMを使ったRAGの性能をまとめて評価できるシステムを作ります。
 
 ## フォルダ構成
 ```
@@ -17,12 +19,19 @@
 │   └── visualize.ipynb                                                       # グラフの表示（人手で作成）
 ├── outputs                                                                   # スクリプトの出力の保存
 │   ├── external
-│   │   └── gemini
-│   │       ├── results_gemini_3_pro.xslx                                     # Gemini 3 Proを用いたRAGの評価結果
-│   │       ├── results_gemini_3_flash.xslx                                   # Gemini 3 Flashを用いたRAGの評価結果
-│   │       ├── results_gemini_2.5_flash.xslx                                 # Gemini 2.5 Flashを用いたRAGの評価結果
-│   │       ├── results_gemini_2.5_flash_lite.xslx                            # Gemini 2.5 Flash Liteを用いたRAGの評価結果
-│   │       └── results_gemini_2.5_pro.xslx                                   # Gemini 2.5 proを用いたRAGの評価結果
+│   │   ├── gemini
+│   │   │   ├── results_gemini-3-pro.xslx                                     # Gemini 3 Proを用いたRAGの評価結果
+│   │   │   ├── results_gemini-3-flash.xslx                                   # Gemini 3 Flashを用いたRAGの評価結果
+│   │   │   ├── results_gemini-2.5-flash.xslx                                 # Gemini 2.5 Flashを用いたRAGの評価結果
+│   │   │   ├── results_gemini-2.5-flash-lite.xslx                            # Gemini 2.5 Flash Liteを用いたRAGの評価結果
+│   │   │   └── results_gemini-2.5-pro.xslx                                   # Gemini 2.5 proを用いたRAGの評価結果
+│   │   └── ollama
+│   │       ├── results_gemma3:1b.xslx                                        # gemma3:1bを用いたRAGの評価結果
+│   │       ├── results_gemma3:4b.xslx                                        # gemma3:4bを用いたRAGの評価結果
+│   │       ├── results_gemma3:12b.xslx                                       # gemma3:12bを用いたRAGの評価結果
+│   │       ├── results_gemma3:27b.xslx                                       # gemma3:27bを用いたRAGの評価結果
+│   │       ├── results_gpt-oss:20b.xslx                                      # gpt-oss:20bを用いたRAGの評価結果
+│   │       └── results_gpt-oss:120b.xslx                                     # gpt-oss:120bを用いたRAGの評価結果
 │   ├── faiss.index                                                           # Faissのベクトルデータベースの情報
 │   ├── plots                                                                 # visualize.pyの出力の保存
 │   │   ├── execution_time_comparison.png                                     # 平均実行時間の棒グラフ
@@ -35,21 +44,31 @@
 │   │   └── faithfulness_boxplot.png                                          # Faithfulnessの箱ひげ図
 │   ├── preprocessed
 │   │   └── preprocessed.xlsx                                                 # 前処理済みデータ
-│   └── summary.xlsx                                                          # RAG評価結果のまとめ
+│   └── summary.xlsx                                                          # 全てのRAGの評価結果のまとめ
 ├── pyproject.toml                                                            # uv環境定義
 ├── python                                                                    # Pythonスクリプトの保存
 │   ├── ask_rag.py                                                            # RAGを1回だけ実行するスクリプト
 │   ├── external
-│   │   └── gemini                                                            # Geminiを用いたRAGの評価用スクリプトの保存
-│   │       ├── evaluate_gemini_base.py                                       # Geminiを用いたRAGの評価用スクリプトの共通クラスの定義
-│   │       ├── evaluate_gemini_3_pro.py                                      # Gemini 3 Proを用いたRAGの評価用スクリプト
-│   │       ├── evaluate_gemini_3_flash.py                                    # Gemini 3 Flashを用いたRAGの評価用スクリプト
-│   │       ├── evaluate_gemini_2.5_flash.py                                  # Gemini 2.5 Flashを用いたRAGの評価用スクリプト
-│   │       ├── evaluate_gemini_2.5_flash_lite.py                             # Gemini 2.5 Flash Liteを用いたRAGの評価用スクリプト
-│   │       └── evaluate_gemini_2.5_pro.py                                    # Gemini 2.5 proを用いたRAGの評価用スクリプト
+│   │   ├── gemini                                                            # Geminiを用いたRAGの評価用スクリプトの保存
+│   │   │   ├── evaluate_gemini_base.py                                       # Geminiを用いたRAGの評価用スクリプトの共通クラスの定義
+│   │   │   ├── evaluate_gemini_3_pro.py                                      # Gemini 3 Proを用いたRAGの評価用スクリプト
+│   │   │   ├── evaluate_gemini_3_flash.py                                    # Gemini 3 Flashを用いたRAGの評価用スクリプト
+│   │   │   ├── evaluate_gemini_2.5_flash.py                                  # Gemini 2.5 Flashを用いたRAGの評価用スクリプト
+│   │   │   ├── evaluate_gemini_2.5_flash_lite.py                             # Gemini 2.5 Flash Liteを用いたRAGの評価用スクリプト
+│   │   │   └── evaluate_gemini_2.5_pro.py                                    # Gemini 2.5 proを用いたRAGの評価用スクリプト
+│   │   └── ollama                                                            # Ollamaに公開されているモデルを用いたRAGの評価用スクリプトの保存
+│   │       ├── evaluate_ollama_base.py                                       # Ollamaのモデルを用いたRAGの評価用スクリプトの共通クラスの定義
+│   │       ├── evaluate_gemma3_1b.py                                         # gemma3:1bを用いたRAGの評価用スクリプト
+│   │       ├── evaluate_gemma3_4b.py                                         # gemma3:4bを用いたRAGの評価用スクリプト
+│   │       ├── evaluate_gemma3_12b.py                                        # gemma3:12bを用いたRAGの評価用スクリプト
+│   │       ├── evaluate_gemma3_27b.py                                        # gemma3:27bを用いたRAGの評価用スクリプト
+│   │       ├── evaluate_gpt-oss_20b.py                                       # gpt-oss:20bを用いたRAGの評価用スクリプト
+│   │       └── evaluate_gpt-oss_120b.py                                      # gpt-oss:120bを用いたRAGの評価用スクリプト
 │   ├── tools
 │   │   ├── ingest.py                                                         # チャンクのベクトル化・ベクトルデータベースの作成と保存
 │   │   └── preprocess.py                                                     # 文書の前処理（データクリーニング・チャンキング）
+│   ├── utils
+│   │   └── hardware_info.py                                                  # ハードウェア情報の取得
 │   └── visualize
 │       └── visualize.py                                                      # グラフの作成
 ├── shell                                                                     # Shellスクリプトの保存
@@ -57,104 +76,64 @@
 │   └── evaluate.sh                                                           # RAGの構築と評価を実行
 ├── uv.lock                                                                   # uv環境定義
 ├── 設計書                                                                     # 設計書の保存
-│   ├── RAGサンプルソース設計書.md
-│   ├── グラフ仕様書.md
-│   ├── データ仕様書.md
-│   └── スクリプト仕様書.md
+│   ├── ver1
+│   │   ├── RAGサンプルソース設計書.md
+│   │   ├── グラフ仕様書.md
+│   │   ├── データ仕様書.md
+│   │   └── スクリプト仕様書.md
+│   └── ver2
+│       ├── RAGサンプルソース設計書ver2.md
+│       ├── クラス仕様書ver2.md
+│       ├── グラフ仕様書ver2.md
+│       ├── データ仕様書ver2.md
+│       └── スクリプト仕様書ver2.md
 └── 作業メモ       
-    ├── 25_0108_hayate.md                                                     # 作業メモの保存
+    ├── 26_0108_hayate.md                                                     # 作業メモの保存
     └── ...
 ```
 
-## システムの全体フロー
-### RAGの性能評価
-1. ユーザーがpreprocess_ingest.shを実行する。
-2. preprocess_ingest.shがpreprocess.pyを実行する。
-3. preprocess.pyがdata/documentsフォルダ内の全てのpdfファイルを読み取り、データ前処理を実行する。
-4. preprocess.pyが前処理を実行した結果をoutputs/preprocessed/preprocessed.xlsxに保存する
-（ここで、preprocess.pyの処理は終了）。
-5. preprocess_ingest.shがingest.pyを実行する。
-6. ingest.pyがoutputs/preprocessed/preprocessed.xlsxを読み込み、埋め込みモデルを使ってチャンク化された全ての文章をベクトルに変換する。
-7. ingest.pyが全ての文章ベクトルをベクトルデータベースに保存する。
-8. ingest.pyがベクトルデータベースの情報をoutputs/index.faissに保存する（ここで、ingest.pyの処理は終了）。
-9. ユーザーがevaluate.pyを実行する。
-9. evaluate.shがevaluate_{model_name}.pyを実行する。
-    1. ユーザーがevaluate.shの引数でRAGで使用するモデル名を指定していた場合は、そのモデルに対応するevaluate_{model_name}.pyのみ実行する。
-    2. ユーザーがRAGに使用するモデルを何も指定していなかった場合は、全てのevaluate_{model_name}.pyを実行する。
-10. 各evaluate_{model_name}.pyがdata/validation.xlsxを読み込みRagasを用いてRAGなしのモデルの評価を実行する。
-11. 各evaluate_{model_name}.pyがoutputs/index.faissを読み込み、RAGを構築する。
-12. 各evaluate_{model_name}.pyがRagasを用いてRAGの評価を実行する。
-13. 各evaluate_{model_name}.pyが、評価の全ログをoutputs/external/gemini/results_{model_name}.xlsxに保存し、評価の要約をoutputs/summary.xlsxに追記する（ここで、evaluate_{model_name}.pyの処理は終了）。
-
-### RAGの実行
-1. ユーザーがpreprocess_ingest.shを実行する。
-2. ユーザーがモデル名と質問文を引数に渡して、ask_rag.pyを実行する。
-3. ask_rag.pyが、outputs/index.faissを読み込み、引数のモデル名に基づいてRAGを構築する。
-4. ask_rag.pyが、引数の質問文に基づいてRAGから回答を生成し、標準出力にprintする。
-
-### 評価の可視化
-1. ユーザーがpreprocess_ingest.shを実行する。
-2. ユーザーがvisualize.ipynbを実行する。
-3. visualize.ipynbがvisualize.pyからVisualizationGeneratorクラスを読み込みインスタンス化する。
-4. visualize.ipynbがVisualizationGeneratorクラスのgenerate_all_visualizationsメソッドを呼び出す。
-5. generate_all_visualizationsメソッドが、outputs/summary.xlsxを読み込み、グラフを描画してoutputs/figures内に保存する。
-6. visualize.ipynbがoutputs/figures内に保存されたグラフを読み込みノートブック内で表示する。
-
 ## スクリプト仕様
-リンク先を参照してください。
-* [スクリプト仕様書](./スクリプト仕様書.md)
+以下を参照してください。
+
+[スクリプト仕様書](./スクリプト仕様書ver2.md)
 
 ## データ仕様
-リンク先を参照してください。
-* [データ仕様書](./データ仕様書.md)
+以下を参照してください。
 
-## グラフ仕様
-リンク先を参照してください。
-* [グラフ仕様書](./グラフ仕様書.md)
+[データ仕様書](./データ仕様書ver2.md)
 
-## 評価方法
-### 使用するRAG評価ツール
-Ragas
+## クラス仕様書
+以下を参照してください。
 
-### 使用する評価指標
-* Context Precision
-* Context Recall
-* Context Entities Recall
-* Noise Sensitivity
-* Response Relevancy
-* Faithfulness
+[クラス仕様書](./クラス仕様書ver2.md)
 
-### 評価用LLM
-Gemini 2.5 Flash-Lite
+## グラフ仕様書
+以下を参照してください。
 
-### 評価用埋め込みモデル
-gemini-embedding-001
+[グラフ仕様書](./グラフ仕様書ver2.md)
 
-## 使用するAPI
+## API
+### 使用するAPI名
 Google AI Studio Gemini API
 
-APIキーは.envで管理する。
+### APIキー管理方法
+Gemini API用のAPIキーは`<project_root>/.env`に`GEMINI_API_KEY`という名前で保存する。
 
-## 使用する文章生成モデル
-* Gemini 3 Pro
-* Gemini 3 Flash
-* Gemini 2.5 Flash
-* Gemini 2.5 Flash-Lite
-* Gemini 2.5 Pro
+## ツール
 
-## 使用する埋め込みモデル
-gemini-embedding-001
+### LLMのローカル実行ツール
+Ollama
 
-## 使用するベクトルデータベース
-faiss
+### LLM評価ツール
+Ragas
 
-## 動作環境
-OSはMac / Windows / Linuxで動くことを想定しています。
+### ベクトルデータベース
+Faiss
 
 ## 環境セットアップ
 ### 必要条件
-* Python 3.14.2
-* uv (パッケージマネージャー)
+- Python 3.13
+- uv (パッケージマネージャー)
 
 ### 開発者向け環境（Windows/macOS/Linux）
 1. uvのインストール
@@ -171,17 +150,10 @@ OSはMac / Windows / Linuxで動くことを想定しています。
    uv sync
    ```
 
-# Git
-## 作業ブランチ
+## Git
+### 作業ブランチ
 ```
-feature/add_2026_0116_ver_hayate
+feature/add_ollama_hayate
 ```
 
 このブランチ以外に変更を加えないでください。
-
-
-## コミット
-都度適切なタイミングでコミットしてください。
-
-## 備考
-visualize.ipynbは人間が作成します。
