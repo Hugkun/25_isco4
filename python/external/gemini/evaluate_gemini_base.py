@@ -6,19 +6,23 @@ Ragasを用いて評価を実行する基底クラスを定義する。
 """
 
 import os
+import platform
+import re
 import time
 from abc import ABC
 from pathlib import Path
-import re
+
+import psutil
 
 import pandas as pd
 from dotenv import load_dotenv
+from google import genai
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
-from ragas import EvaluationDataset, SingleTurnSample, evaluate
-from google import genai
-from ragas.llms import llm_factory, InstructorBaseRagasLLM
+from langchain_ollama import ChatOllama, OllamaEmbeddings
+from ragas import EvaluationDataset, SingleTurnSample, evaluate, RunConfig
+from ragas.llms import LangchainLLMWrapper, llm_factory
 from ragas.metrics import (
     ContextEntityRecall,
     ContextPrecision,
@@ -38,24 +42,50 @@ VALID_DATA_PATH = PROJECT_ROOT / "data" / "valid.csv"
 RESULTS_OUTPUT_DIR = PROJECT_ROOT / "outputs" / "external" / "gemini"
 SUMMARY_OUTPUT_PATH = PROJECT_ROOT / "outputs" / "summary.xlsx"
 
-# 評価用LLM設定
-EVALUATOR_MODEL = "gemini-2.5-flash-lite"
+# デフォルト設定
+DEFAULT_RAG_EMBEDDING_MODEL = "embeddinggemma:latest"
+DEFAULT_EVALUATOR_LLM = "gemma3:12b"
+DEFAULT_EVALUATOR_EMBEDDING_MODEL = "embeddinggemma:latest"
 
-# 評価用埋め込みモデル設定
-EVALUATOR_EMBEDDING_MODEL = "models/gemini-embedding-001"
+# Gemini APIの埋め込みモデル名
+GEMINI_EMBEDDING_MODEL = "gemini-embedding-001"
 
-# RAGに使用する埋め込みモデル設定
-RAG_EMBEDDING_MODEL = "models/gemini-embedding-001"
+# Gemini LLMモデル名のリスト
+GEMINI_LLM_MODELS = [
+    "gemini-3-pro-preview",
+    "gemini-3-flash-preview",
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-pro",
+]
+
+import sys
+python_path = PROJECT_ROOT / "python"
+sys.path.insert(0, str(python_path))
+from utils.hardware_info import get_hardware_info
 
 class GeminiRAGEvaluator(ABC):
     """Geminiを用いたRAGの評価用基底クラス"""
 
-    def __init__(self, model_name: str):
+    def __init__(
+        self,
+        model_name: str,
+        rag_embedding_model: str = DEFAULT_RAG_EMBEDDING_MODEL,
+        evaluator_llm: str = DEFAULT_EVALUATOR_LLM,
+        evaluator_embedding_model: str = DEFAULT_EVALUATOR_EMBEDDING_MODEL,
+    ):
         """
         Args:
             model_name: RAGに使用するGeminiモデルの名前
+            rag_embedding_model: RAG用埋め込みモデルの名前（デフォルト: embeddinggemma:latest）
+            evaluator_llm: 評価用LLMの名前（デフォルト: gemma3:12b）
+            evaluator_embedding_model: 評価用埋め込みモデルの名前（デフォルト: embeddinggemma:latest）
         """
         self.model_name = model_name
+        self.rag_embedding_model = rag_embedding_model
+        self.evaluator_llm = evaluator_llm
+        self.evaluator_embedding_model = evaluator_embedding_model
+
         self._api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
         if not self._api_key:
             raise ValueError(
@@ -73,28 +103,44 @@ class GeminiRAGEvaluator(ABC):
             google_api_key=self._api_key,
         )
 
-    def _initialize_embeddings(self) -> GoogleGenerativeAIEmbeddings:
-        """埋め込みモデルを初期化する"""
-        return GoogleGenerativeAIEmbeddings(
-            model=RAG_EMBEDDING_MODEL,
-            google_api_key=self._api_key,
-        )
+    def _initialize_embeddings(
+        self,
+    ) -> GoogleGenerativeAIEmbeddings | OllamaEmbeddings:
+        """RAG用埋め込みモデルを初期化する"""
+        if self.rag_embedding_model == GEMINI_EMBEDDING_MODEL:
+            return GoogleGenerativeAIEmbeddings(
+                model=f"models/{GEMINI_EMBEDDING_MODEL}",
+                google_api_key=self._api_key,
+            )
+        else:
+            return OllamaEmbeddings(model=self.rag_embedding_model)
     
-    def _initialize_evaluator_llm(self) -> InstructorBaseRagasLLM:
+    def _initialize_evaluator_llm(self) -> LangchainLLMWrapper:
         """評価用LLMを初期化する"""
-        client = genai.Client(api_key=self._api_key)
-        return llm_factory(
-            model=EVALUATOR_MODEL, 
-            provider="google", 
-            client=client
-        )
+        if self.evaluator_llm in GEMINI_LLM_MODELS:
+            # Gemini APIを使用
+            client = genai.Client(api_key=self._api_key)
+            return llm_factory(
+                model=self.evaluator_llm,
+                provider="google",
+                client=client,
+            )
+        else:
+            # Ollamaを使用
+            llm = ChatOllama(model=self.evaluator_llm)
+            return LangchainLLMWrapper(llm)
 
-    def _initialize_evaluator_embeddings(self) -> GoogleGenerativeAIEmbeddings:
+    def _initialize_evaluator_embeddings(
+        self,
+    ) -> GoogleGenerativeAIEmbeddings | OllamaEmbeddings:
         """評価用埋め込みモデルを初期化する"""
-        return GoogleGenerativeAIEmbeddings(
-            model=EVALUATOR_EMBEDDING_MODEL,
-            google_api_key=self._api_key,
-        )
+        if self.evaluator_embedding_model == GEMINI_EMBEDDING_MODEL:
+            return GoogleGenerativeAIEmbeddings(
+                model=f"models/{GEMINI_EMBEDDING_MODEL}",
+                google_api_key=self._api_key,
+            )
+        else:
+            return OllamaEmbeddings(model=self.evaluator_embedding_model)
 
     def _load_vector_store(self) -> FAISS:
         """FAISSベクトルストアを読み込む"""
@@ -209,7 +255,9 @@ class GeminiRAGEvaluator(ABC):
         ]
 
         # 評価の実行
-        evaluation_result = evaluate(dataset=dataset, metrics=metrics, embeddings=embeddings)
+        evaluation_result = evaluate(
+            dataset=dataset, metrics=metrics, embeddings=embeddings, run_config=RunConfig(timeout=3000.0)
+        ) # タイムアウト3000秒
         return evaluation_result
 
     def _evaluate_llm_response_relevancy(
@@ -234,7 +282,9 @@ class GeminiRAGEvaluator(ABC):
 
         dataset = EvaluationDataset(samples=samples)
         metric = ResponseRelevancy(llm=llm)
-        evaluation_result = evaluate(dataset=dataset, metrics=[metric], embeddings=embeddings)
+        evaluation_result = evaluate(
+            dataset=dataset, metrics=[metric], embeddings=embeddings, run_config=RunConfig(timeout=3000.0)
+        ) # タイムアウト3000秒
 
         return evaluation_result.to_pandas()["answer_relevancy"].tolist()
 
@@ -279,27 +329,42 @@ class GeminiRAGEvaluator(ABC):
         # summary.xlsxの更新
         self._update_summary(results_df)
 
+    def _format_time_hhmm(self, seconds: float) -> str:
+        """秒数をhh:mm形式に変換する"""
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        return f"{hours:02d}:{minutes:02d}"
+
     def _update_summary(self, results_df: pd.DataFrame) -> None:
         """summary.xlsxを更新する"""
-        # 平均値を計算
+        # 合計実行時間を計算してhh:mm形式に変換
+        llm_total_time = results_df["llm.execution_time"].sum()
+        rag_total_time = results_df["rag.execution_time"].sum()
+
+        # サマリー行を作成
         summary_row = {
-            "model": self.model_name,
-            "llm.execution_time": results_df["llm.execution_time"].mean(),
-            "rag.execution_time": results_df["rag.execution_time"].mean(),
-            "llm.response_relevancy": results_df["llm.response_relevancy"].mean(),
-            "rag.context_precision": results_df["rag.context_precision"].mean(),
-            "rag.context_recall": results_df["rag.context_recall"].mean(),
-            "rag.context_entities_recall": results_df["rag.context_entities_recall"].mean(),
-            "rag.noise_sensitivity": results_df["rag.noise_sensitivity"].mean(),
-            "rag.response_relevancy": results_df["rag.response_relevancy"].mean(),
-            "rag.faithfulness": results_df["rag.faithfulness"].mean(),
+            "llm": self.model_name,
+            "embedding_model": self.rag_embedding_model,
+            "eval_n": len(results_df),
+            "hardware": get_hardware_info(),
+            "llm.total_execution_time": self._format_time_hhmm(llm_total_time),
+            "rag.total_execution_time": self._format_time_hhmm(rag_total_time),
+            "llm.avg_response_relevancy": results_df["llm.response_relevancy"].mean(),
+            "rag.avg_context_precision": results_df["rag.context_precision"].mean(),
+            "rag.avg_context_recall": results_df["rag.context_recall"].mean(),
+            "rag.avg_context_entities_recall": results_df[
+                "rag.context_entities_recall"
+            ].mean(),
+            "rag.avg_noise_sensitivity": results_df["rag.noise_sensitivity"].mean(),
+            "rag.avg_response_relevancy": results_df["rag.response_relevancy"].mean(),
+            "rag.avg_faithfulness": results_df["rag.faithfulness"].mean(),
         }
 
         # 既存のsummary.xlsxを読み込む or 新規作成
         if SUMMARY_OUTPUT_PATH.exists():
             summary_df = pd.read_excel(SUMMARY_OUTPUT_PATH, engine="openpyxl")
             # 同じモデルの行が存在する場合は削除
-            summary_df = summary_df[summary_df["model"] != self.model_name]
+            summary_df = summary_df[summary_df["llm"] != self.model_name]
         else:
             summary_df = pd.DataFrame()
 
@@ -318,8 +383,10 @@ class GeminiRAGEvaluator(ABC):
         # RAGチェーンの構築
         print("\n1. RAGチェーンの構築")
         prompt = self._build_rag_chain()
-        print(f"  モデル: {self.model_name}")
-        print(f"  埋め込みモデル: {RAG_EMBEDDING_MODEL}")
+        print(f"  RAG用LLM: {self.model_name}")
+        print(f"  RAG用埋め込みモデル: {self.rag_embedding_model}")
+        print(f"  評価用LLM: {self.evaluator_llm}")
+        print(f"  評価用埋め込みモデル: {self.evaluator_embedding_model}")
 
         # 検証用データの読み込み
         print("\n2. 検証用データの読み込み")

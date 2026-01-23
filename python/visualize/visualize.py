@@ -15,7 +15,8 @@ import pandas as pd
 # パス設定
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 SUMMARY_FILE = BASE_DIR / "outputs" / "summary.xlsx"
-RESULTS_DIR = BASE_DIR / "outputs" / "external" / "gemini"
+GEMINI_RESULTS_DIR = BASE_DIR / "outputs" / "external" / "gemini"
+OLLAMA_RESULTS_DIR = BASE_DIR / "outputs" / "external" / "ollama"
 OUTPUT_DIR = BASE_DIR / "outputs" / "plots"
 
 # グラフの色設定
@@ -39,12 +40,55 @@ class VisualizationGenerator:
         return pd.read_excel(SUMMARY_FILE)
 
     def _load_results_data(self) -> dict[str, pd.DataFrame]:
-        """全てのresults_{model_name}.xlsxを読み込む"""
+        """全てのresults_{model_name}.xlsxを読み込む（Gemini + Ollama）"""
         results = {}
-        for file_path in RESULTS_DIR.glob("results_*.xlsx"):
-            model_name = file_path.stem.replace("results_", "")
-            results[model_name] = pd.read_excel(file_path)
+
+        # Geminiの結果を読み込む
+        if GEMINI_RESULTS_DIR.exists():
+            for file_path in GEMINI_RESULTS_DIR.glob("results_*.xlsx"):
+                model_name = file_path.stem.replace("results_", "")
+                results[model_name] = pd.read_excel(file_path)
+
+        # Ollamaの結果を読み込む
+        if OLLAMA_RESULTS_DIR.exists():
+            for file_path in OLLAMA_RESULTS_DIR.glob("results_*.xlsx"):
+                model_name = file_path.stem.replace("results_", "")
+                results[model_name] = pd.read_excel(file_path)
+
         return results
+
+    def _parse_time_hhmm(self, time_str: str) -> float:
+        """hh:mm形式の時間文字列を秒に変換する"""
+        if pd.isna(time_str):
+            return 0.0
+        parts = str(time_str).split(":")
+        if len(parts) == 2:
+            hours = int(parts[0])
+            minutes = int(parts[1])
+            return hours * 3600 + minutes * 60
+        return 0.0
+
+    def _prepare_summary_for_plotting(self) -> pd.DataFrame:
+        """summary.xlsxのデータをグラフ用に整形する"""
+        df = self.summary_df.copy()
+
+        # hh:mm形式の実行時間を秒に変換し、eval_nで割って平均を計算
+        df["llm.avg_execution_time"] = df.apply(
+            lambda row: self._parse_time_hhmm(row["llm.total_execution_time"])
+            / row["eval_n"]
+            if row["eval_n"] > 0
+            else 0,
+            axis=1,
+        )
+        df["rag.avg_execution_time"] = df.apply(
+            lambda row: self._parse_time_hhmm(row["rag.total_execution_time"])
+            / row["eval_n"]
+            if row["eval_n"] > 0
+            else 0,
+            axis=1,
+        )
+
+        return df
 
     def _setup_plot_style(self):
         """グラフのスタイル設定"""
@@ -80,7 +124,7 @@ class VisualizationGenerator:
         """グルーピング棒グラフを作成（RAGの有無で比較）"""
         fig, ax = plt.subplots(figsize=(10, 6))
 
-        models = df["model"].tolist()
+        models = df["llm"].tolist()
         x = range(len(models))
         width = 0.35
 
@@ -126,7 +170,7 @@ class VisualizationGenerator:
 
         # ソート
         sorted_df = df.sort_values(by=col, ascending=ascending)
-        models = sorted_df["model"].tolist()
+        models = sorted_df["llm"].tolist()
         values = sorted_df[col].tolist()
 
         bars = ax.bar(models, values, color=COLOR_SINGLE)
@@ -247,10 +291,11 @@ class VisualizationGenerator:
 
     def generate_execution_time_comparison(self):
         """1. 平均実行時間の比較（棒グラフ）"""
+        plot_df = self._prepare_summary_for_plotting()
         self._create_grouped_bar_chart(
-            df=self.summary_df,
-            col_no_rag="llm.execution_time",
-            col_rag="rag.execution_time",
+            df=plot_df,
+            col_no_rag="llm.avg_execution_time",
+            col_rag="rag.avg_execution_time",
             title="Execution Time Comparison: Model vs RAG Condition",
             ylabel="Execution Time (seconds)",
             filename="execution_time_comparison.png",
@@ -260,7 +305,7 @@ class VisualizationGenerator:
         """2. 平均Noise Sensitivity比較（棒グラフ）"""
         self._create_single_bar_chart(
             df=self.summary_df,
-            col="rag.noise_sensitivity",
+            col="rag.avg_noise_sensitivity",
             title="Noise Sensitivity Comparison by Model",
             ylabel="Noise Sensitivity Score (0.0 - 1.0)",
             filename="noise_sensitivity_model_comparison.png",
@@ -271,8 +316,8 @@ class VisualizationGenerator:
         """3. 平均Response Relevancy比較（棒グラフ）"""
         self._create_grouped_bar_chart(
             df=self.summary_df,
-            col_no_rag="llm.response_relevancy",
-            col_rag="rag.response_relevancy",
+            col_no_rag="llm.avg_response_relevancy",
+            col_rag="rag.avg_response_relevancy",
             title="Response Relevancy Score: Model vs RAG Condition",
             ylabel="Response Relevancy Score (0.0 - 1.0)",
             filename="response_relevancy_comparison.png",
@@ -282,10 +327,10 @@ class VisualizationGenerator:
         """4. 平均Faithfulness比較（棒グラフ）"""
         self._create_single_bar_chart(
             df=self.summary_df,
-            col="rag.faithfulness",
+            col="rag.avg_faithfulness",
             title="Faithfulness Score Comparison by Model",
             ylabel="Faithfulness Score (0.0 - 1.0)",
-            filename="faithfulness_comparison.png",
+            filename="faithfulness_model_comparison.png",
             ascending=False,
         )
 
@@ -361,7 +406,7 @@ class VisualizationGenerator:
         print("   - response_relevancy_comparison.png")
         self.generate_response_relevancy_comparison()
 
-        print("   - faithfulness_comparison.png")
+        print("   - faithfulness_model_comparison.png")
         self.generate_faithfulness_comparison()
 
         print("   - execution_time_boxplot.png")
