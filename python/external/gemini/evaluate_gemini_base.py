@@ -38,7 +38,7 @@ load_dotenv()
 # パス設定
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 FAISS_INDEX_PATH = PROJECT_ROOT / "outputs" / "faiss.index"
-VALID_DATA_PATH = PROJECT_ROOT / "data" / "valid.csv"
+VALID_DATA_PATH = PROJECT_ROOT / "data" / "valid.xlsx"
 RESULTS_OUTPUT_DIR = PROJECT_ROOT / "outputs" / "external" / "gemini"
 SUMMARY_OUTPUT_PATH = PROJECT_ROOT / "outputs" / "summary.xlsx"
 
@@ -163,7 +163,7 @@ class GeminiRAGEvaluator(ABC):
                 f"検証用データが見つかりません: {VALID_DATA_PATH}"
             )
 
-        return pd.read_csv(VALID_DATA_PATH)
+        return pd.read_excel(VALID_DATA_PATH)
 
     def _build_rag_chain(self):
         """RAGチェーンを構築する"""
