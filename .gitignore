@@ -16,7 +16,8 @@ uv.lock
 # data files
 data/*
 !data/documents
-!data/valid.csv
+!data/valid.xlsx
+!data/20260126_valid.xlsx
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/

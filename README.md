@@ -222,3 +222,15 @@ evaluation_result = evaluate(
 ```
 OMP: Hint This means that multiple copies of the OpenMP runtime have been linked into the program. That is dangerous, since it can degrade performance or cause incorrect results. The best thing to do is to ensure that only a single OpenMP runtime is linked into the process, e.g. by avoiding static linking of the OpenMP runtime in any library. As an unsafe, unsupported, undocumented workaround you can set the environment variable KMP_DUPLICATE_LIB_OK=TRUE to allow the program to continue to execute, but that may cause crashes or silently produce incorrect results. For more information, please see http://openmp.llvm.org/
 ```
+
+### 大きめの検証用データについて
+このソースコードでは、デフォルトではサンプル数が10件の小規模な検証データを用います。(`<project_root>/data/valid.xlsx`)
+
+サンプル数が50件の大きめな検証用データも用意しています。(`<project_root>/data/20260126_valid.xlsx`)
+
+この検証用データを使用したい場合は、以下のスクリプトの、`VALID_DATA_PATH`定数を`PROJECT_ROOT / "data" / "20260126_valid.xlsx"`に変更してください。
+
+- `<project_root>/python/external/gemini/evaluate_gemini_base.py`
+- `<project_root>/python/external/ollama/evaluate_ollama_base.py`
+
+⚠️ サンプル数を50件にした場合、評価時間が通常よりも長くなるので、注意してください。
