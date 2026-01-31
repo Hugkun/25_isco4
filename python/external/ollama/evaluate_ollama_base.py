@@ -326,7 +326,7 @@ class OllamaRAGEvaluator(ABC):
 
         # 結果ファイルの保存
         RESULTS_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        results_file = RESULTS_OUTPUT_DIR / f"results_{self.model_name}.xlsx"
+        results_file = RESULTS_OUTPUT_DIR / f"results_{self.model_name.replace(':', '_')}.xlsx"
         results_df.to_excel(results_file, index=False, engine="openpyxl")
         print(f"  結果ファイルを保存しました: {results_file}")
 
